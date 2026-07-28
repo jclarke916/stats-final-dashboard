@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gas vs. EV — Monthly Fuel Cost Comparison</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-gas: #eb6834;   /* categorical slot 2 — orange */
+    --series-ev:  #2a78d6;   /* categorical slot 1 — blue  */
+    --delta-good: #006300;
+    --wash-gas: rgba(235,104,52,0.10);
+    --wash-ev:  rgba(42,120,214,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-gas: #d95926;
+      --series-ev:  #3987e5;
+      --delta-good: #0ca30c;
+      --wash-gas: rgba(217,89,38,0.14);
+      --wash-ev:  rgba(57,135,229,0.14);
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-gas: #d95926;
+    --series-ev:  #3987e5;
+    --delta-good: #0ca30c;
+    --wash-gas: rgba(217,89,38,0.14);
+    --wash-ev:  rgba(57,135,229,0.14);
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .viz-root { background: var(--page); color: var(--text-primary); min-height: 100vh; padding: 24px 28px 48px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header.hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 6px; }
+  h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { color: var(--text-secondary); font-size: 13.5px; margin-top: 4px; max-width: 760px; line-height: 1.45; }
+  .theme-btn { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+    border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; flex: none; }
+
+  .legend-row { display: flex; gap: 18px; align-items: center; margin: 14px 0 18px; font-size: 12.5px; color: var(--text-secondary); }
+  .key { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; }
+
+  .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .tile .lbl { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
+  .tile .val { font-size: 30px; font-weight: 600; }
+  .tile .note { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+  .tile .delta { font-size: 12.5px; margin-top: 5px; color: var(--delta-good); font-weight: 550; }
+  .hero .val { font-size: 48px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+  .card h2 { font-size: 14.5px; font-weight: 620; margin-bottom: 2px; }
+  .card .csub { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+
+  table.stats { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.stats th, table.stats td { padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+  table.stats th:first-child, table.stats td:first-child { text-align: left; font-variant-numeric: normal; }
+  table.stats thead th { color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--baseline); }
+  table.stats tbody tr { border-bottom: 1px solid var(--grid); }
+  table.stats tbody tr:last-child { border-bottom: none; }
+  table.stats td { color: var(--text-primary); }
+  table.stats td.dim { color: var(--text-secondary); }
+  .thkey { display: inline-flex; align-items: center; gap: 6px; }
+
+  .controls { display: flex; gap: 8px; align-items: center; margin: 0 0 14px; flex-wrap: wrap; }
+  .controls .clab { font-size: 12.5px; color: var(--text-secondary); margin-right: 2px; }
+  .sortbtn { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+    border-radius: 8px; padding: 5px 12px; font-size: 12.5px; cursor: pointer; }
+  .sortbtn[aria-pressed="true"] { color: var(--text-primary); font-weight: 620; border-color: var(--baseline);
+    box-shadow: inset 0 0 0 1px var(--baseline); }
+
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .axis-t { fill: var(--text-muted); font-size: 11px; }
+  .dlab { fill: var(--text-secondary); font-size: 11px; }
+  .dlab-strong { fill: var(--text-primary); font-size: 11.5px; font-weight: 600; }
+
+  .tooltip { position: fixed; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; font-size: 12.5px; box-shadow: 0 6px 24px rgba(0,0,0,0.14);
+    z-index: 30; display: none; min-width: 150px; }
+  .tooltip .tt-title { font-weight: 620; margin-bottom: 6px; }
+  .tt-row { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+  .tt-key { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+  .tt-val { font-weight: 620; }
+  .tt-name { color: var(--text-secondary); }
+
+  details.tblv { margin-top: 14px; }
+  details.tblv summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); padding: 4px 0; }
+  .findings li { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin: 0 0 9px 0; }
+  .findings b { color: var(--text-primary); font-weight: 620; }
+  footer.src { margin-top: 22px; font-size: 11.5px; color: var(--text-muted); line-height: 1.6; }
+  footer.src a { color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="viz-root" id="root">
+<div class="wrap">
+
+  <header class="hd">
+    <div>
+      <h1>Fill-Up vs. Plug-In: Monthly Cost of Driving, State by State</h1>
+      <div class="sub">2026 Ford F-150 4WD (gasoline) vs. 2026 Tesla Model 3 RWD (home charging) &middot; 1,125 miles/month (FHWA average) &middot; 50 states + DC</div>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">Dark mode</button>
+  </header>
+
+  <div class="legend-row" role="list" aria-label="Series legend">
+    <span class="key" role="listitem"><span class="swatch" style="background:var(--series-gas)"></span>Ford F-150 (gas)</span>
+    <span class="key" role="listitem"><span class="swatch" style="background:var(--series-ev)"></span>Tesla Model 3 (home charging)</span>
+  </div>
+
+  <div class="grid-kpi">
+    <div class="card tile hero">
+      <div class="lbl">Average monthly savings, EV vs. gas</div>
+      <div class="val" id="k-sav">$179.36</div>
+      <div class="delta">&#8593; $2,152 per year</div>
+    </div>
+    <div class="card tile">
+      <div class="lbl">Mean monthly gas cost (F-150)</div>
+      <div class="val">$231.53</div>
+      <div class="note">median $228.83 &middot; SD $23.69</div>
+    </div>
+    <div class="card tile">
+      <div class="lbl">Mean monthly charging cost (Model 3)</div>
+      <div class="val">$52.17</div>
+      <div class="note">median $44.66 &middot; SD $18.65</div>
+    </div>
+    <div class="card tile">
+      <div class="lbl">Two-sample t-test, left-tailed</div>
+      <div class="val">t = &minus;42.48</div>
+      <div class="note">df &asymp; 94.8 (Welch) &middot; p &lt; .001 &mdash; reject H&#8320;</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Five-number summary &mdash; box plots</h2>
+      <div class="csub">Monthly cost ($), shared scale. Dots beyond the 1.5&times;IQR fence are outliers.</div>
+      <div id="boxplot"></div>
+    </div>
+    <div class="card">
+      <h2>Descriptive statistics</h2>
+      <div class="csub">n = 51 (50 states + DC) &middot; monthly cost in USD</div>
+      <table class="stats">
+        <thead>
+          <tr>
+            <th>Statistic</th>
+            <th><span class="thkey"><span class="swatch" style="background:var(--series-gas)"></span>Gas</span></th>
+            <th><span class="thkey"><span class="swatch" style="background:var(--series-ev)"></span>EV</span></th>
+            <th>Savings</th>
+          </tr>
+        </thead>
+        <tbody id="statsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Distributions don&rsquo;t even overlap</h2>
+      <div class="csub">Histogram of monthly cost &mdash; $20 classes with .5 boundaries ($19.50, $39.50, &hellip;), so bars touch and no value lands on an edge. The costliest EV state (Hawaii, $126) is still $71 below the cheapest gas state (Indiana, $197).</div>
+      <div id="hist"></div>
+    </div>
+    <div class="card">
+      <h2>Key findings</h2>
+      <ul class="findings" style="padding-left:18px; margin-top:10px;">
+        <li><b>Charging is ~4.4&times; cheaper on average</b> &mdash; $52.17/mo vs. $231.53/mo for the same 1,125 miles. Every one of the 51 states saves money by charging.</li>
+        <li><b>The two distributions are completely separated</b> &mdash; the EV maximum ($125.87, Hawaii) sits far below the gas minimum ($196.54, Indiana), so no overlap at all.</li>
+        <li><b>Both are right-skewed with the same outliers</b> &mdash; California and Hawaii breach the upper 1.5&times;IQR fence in both datasets (gas also flags Washington), and mean &gt; median in both.</li>
+        <li><b>Gas costs vary more in dollars, EVs more in relative terms</b> &mdash; SD $23.69 (CV 10%) for gas vs. SD $18.65 (CV 36%) for charging, because electricity rates differ more between states than gas prices do.</li>
+        <li><b>Savings range from $148/mo (Indiana) to $249/mo (Washington)</b> &mdash; cheap-electricity, expensive-gas states like Washington save most; the two costs correlate only moderately by state (r = 0.56).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Hypothesis test &mdash; is the difference real?</h2>
+      <div class="csub">Independent two-sample t-test (Welch), left-tailed &middot; &alpha; = 0.05</div>
+      <ul class="findings" style="padding-left:18px; margin-top:10px;">
+        <li><b>Hypotheses:</b> H&#8320;: &mu;<sub>EV</sub> &minus; &mu;<sub>gas</sub> = 0 &nbsp;vs.&nbsp; H<sub>a</sub>: &mu;<sub>EV</sub> &minus; &mu;<sub>gas</sub> &lt; 0 (left-tailed) &mdash; matching our claim that electric vehicles are more cost-efficient than gas vehicles.</li>
+        <li><b>Result:</b> t = &minus;42.48, df &asymp; 94.8. The critical value at &alpha; = 0.05 is &minus;1.661, and our t is far into the left tail (p &lt; .001), so we <b>reject H&#8320;</b> &mdash; mean monthly charging cost is significantly lower than mean gas cost.</li>
+        <li><b>95% confidence bound</b> (one-sided, matching the left-tailed test) for &mu;<sub>EV</sub> &minus; &mu;<sub>gas</sub>: <b>at most &minus;$172.34</b>. Zero is nowhere near the bound, agreeing with the test: we&rsquo;re 95% confident charging costs at least ~$172/mo less. (Two-sided 95% CI: &minus;$187.74 to &minus;$170.97.)</li>
+        <li><b>Conditions:</b> both samples have n = 51 &ge; 30 (CLT covers the right-skew and the CA/HI outliers); costs are computed independently within each dataset. Caveat: this is a census of all 51 jurisdictions, not a random sample, and the two groups share the same states.</li>
+        <li><b>Robustness:</b> because both costs are measured on the <i>same</i> 51 states, a paired t-test on the differences is arguably the better fit &mdash; left-tailed it gives t(50) = &minus;63.01, p &lt; .001, 95% upper bound &minus;$174.58. Same conclusion, even stronger.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Conclusion, errors &amp; limitations</h2>
+      <div class="csub">Answering the research question: which is more cost-efficient?</div>
+      <ul class="findings" style="padding-left:18px; margin-top:10px;">
+        <li><b>Answer:</b> for fuel alone, the EV wins everywhere &mdash; charging a Model 3 at home costs less than fueling an F-150 in all 51 jurisdictions, by ~$179/mo (~$2,152/yr) on average. The data support the hypothesis.</li>
+        <li><b>Type I error</b> (concluding EVs are cheaper when they aren&rsquo;t) is very unlikely here &mdash; p &lt; .001 is orders of magnitude below &alpha;. <b>Type II</b> doesn&rsquo;t apply since we rejected H&#8320;.</li>
+        <li><b>Limitations:</b> fuel/energy cost only &mdash; purchase price, insurance, maintenance, depreciation, and battery replacement are excluded; home-charging rates only (DC fast charging costs 2&ndash;3&times; more); truck vs. sedan comparison; state averages hide within-state variation; gas prices are July 2026 while electricity rates are April 2026 (the latest EIA has published &mdash; EIA reports ~2&ndash;3 months behind).</li>
+        <li><b>Future work:</b> compare same-class vehicles (e.g., F-150 vs. F-150 Lightning), add hybrids and hydrogen, and use total cost of ownership.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h2>State by state: gas &#8594; EV, the gap is the savings</h2>
+    <div class="csub">Each row connects a state&rsquo;s monthly charging cost (blue) to its monthly gas cost (orange). Hover any row for exact values.</div>
+    <div class="controls" role="group" aria-label="Sort states">
+      <span class="clab">Sort by</span>
+      <button class="sortbtn" data-sort="sav" aria-pressed="true" type="button">Savings</button>
+      <button class="sortbtn" data-sort="gas" aria-pressed="false" type="button">Gas cost</button>
+      <button class="sortbtn" data-sort="ev" aria-pressed="false" type="button">EV cost</button>
+      <button class="sortbtn" data-sort="az" aria-pressed="false" type="button">State A&ndash;Z</button>
+    </div>
+    <div id="dumbbell"></div>
+    <details class="tblv">
+      <summary>View as table (all 51 rows)</summary>
+      <table class="stats" id="dataTable" style="margin-top:10px;">
+        <thead><tr><th>State</th><th>Gas $/mo</th><th>EV $/mo</th><th>Savings $/mo</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </details>
+  </div>
+
+  <footer class="src">
+    Methodology: cost = 1,125 mi/mo &times; fuel used per mile &times; state price. Mileage: FHWA Highway Statistics (~13,500 mi/yr).
+    Gas: 2026 Ford F-150 4WD, 20 MPG EPA combined (fueleconomy.gov); state prices AAA State Gas Price Averages, July 2026.
+    EV: 2026 Tesla Model 3 RWD, 24 kWh/100 mi EPA incl. charging losses (fueleconomy.gov); residential rates EIA, April 2026 (latest EIA monthly release; via chooseenergy.com &amp; electricchoice.com, cross-checked).
+    Home charging only &mdash; public DC fast charging costs more. Descriptive stats use sample SD and linear-interpolation quartiles (Excel QUARTILE).
+    Data: &ldquo;Gas Monthly Cost Data — Dominique and Sophia.xlsx&rdquo; &middot; &ldquo;EV Monthly Cost Data — Jermaine.xlsx&rdquo;.
+  </footer>
+
+</div>
+<div class="tooltip" id="tt" role="status"></div>
+</div>
+
+<script>
+"use strict";
+const STATES = [["Alabama",212.51,47.01,165.5],["Alaska",266.46,73.84,192.62],["Arizona",247.84,41.8,206.04],["Arkansas",213.58,38.23,175.35],["California",317.7,95.17,222.53],["Colorado",229.5,44.66,184.84],["Connecticut",236.81,87.05,149.76],["Delaware",234.28,50.73,183.55],["District of Columbia",237.94,68.61,169.33],["Florida",223.26,41.53,181.73],["Georgia",220.56,41.5,179.06],["Hawaii",305.27,125.87,179.4],["Idaho",238.56,34.29,204.27],["Illinois",239.46,55.27,184.19],["Indiana",196.54,48.33,148.21],["Iowa",211.84,37.42,174.42],["Kansas",211.05,42.61,168.44],["Kentucky",210.38,40.55,169.83],["Louisiana",208.07,38.99,169.08],["Maine",230.85,76.73,154.12],["Maryland",234.96,59.59,175.37],["Massachusetts",232.54,79.52,153.02],["Michigan",237.32,57.75,179.57],["Minnesota",227.08,44.25,182.83],["Mississippi",206.38,45.25,161.13],["Missouri",216.56,37.83,178.73],["Montana",241.71,37.53,204.18],["Nebraska",222.98,35.86,187.11],["Nevada",269.44,38.58,230.86],["New Hampshire",228.83,73.55,155.27],["New Jersey",235.52,63.53,171.99],["New Mexico",223.71,40.91,182.8],["New York",238.0,79.52,158.47],["North Carolina",213.92,43.88,170.04],["North Dakota",219.83,33.34,186.48],["Ohio",218.25,52.62,165.63],["Oklahoma",212.12,35.94,176.18],["Oregon",260.66,42.61,218.05],["Pennsylvania",238.05,57.97,180.08],["Rhode Island",232.43,76.41,156.02],["South Carolina",212.01,46.06,165.95],["South Dakota",226.18,39.2,186.98],["Tennessee",208.41,40.34,168.07],["Texas",207.51,45.87,161.64],["Utah",233.1,35.88,197.22],["Vermont",237.09,66.31,170.78],["Virginia",223.88,46.93,176.95],["Washington",287.27,38.77,248.5],["West Virginia",218.31,43.36,174.95],["Wisconsin",218.48,51.87,166.6],["Wyoming",233.04,39.64,193.4]];
+
+const GAS = {n:51, mean:231.53, median:228.83, sd:23.69, min:196.54, q1:215.24, q3:237.63, max:317.70, iqr:22.39, uf:271.21, lf:181.66, minS:"Indiana", maxS:"California", outliers:["Washington","Hawaii","California"]};
+const EV  = {n:51, mean:52.17, median:44.66, sd:18.65, min:33.34, q1:39.42, q3:58.78, max:125.87, iqr:19.36, uf:87.82, lf:10.38, minS:"North Dakota", maxS:"Hawaii", outliers:["California","Hawaii"]};
+const SAV = {n:51, mean:179.36, median:176.18, sd:20.33, min:148.21, q1:167.34, q3:185.66, max:248.50, iqr:18.33, minS:"Indiana", maxS:"Washington"};
+
+const fmt$ = v => "$" + v.toFixed(2);
+const XMAX = 320, XMIN = 0;
+
+/* ---------- theme toggle ---------- */
+const themeBtn = document.getElementById("themeBtn");
+function syncThemeBtn() {
+  const forced = document.documentElement.getAttribute("data-theme");
+  const osDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const dark = forced ? forced === "dark" : osDark;
+  themeBtn.textContent = dark ? "Light mode" : "Dark mode";
+}
+themeBtn.addEventListener("click", () => {
+  const forced = document.documentElement.getAttribute("data-theme");
+  const osDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const dark = forced ? forced === "dark" : osDark;
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+  syncThemeBtn();
+});
+syncThemeBtn();
+
+/* ---------- tooltip ---------- */
+const tt = document.getElementById("tt");
+function showTT(evt, title, rows) {
+  tt.replaceChildren();
+  const t = document.createElement("div"); t.className = "tt-title"; t.textContent = title; tt.appendChild(t);
+  for (const r of rows) {
+    const row = document.createElement("div"); row.className = "tt-row";
+    const key = document.createElement("span"); key.className = "tt-key";
+    key.style.background = r.color || "transparent";
+    const val = document.createElement("span"); val.className = "tt-val"; val.textContent = r.value;
+    const name = document.createElement("span"); name.className = "tt-name"; name.textContent = r.name;
+    row.append(key, val, name); tt.appendChild(row);
+  }
+  tt.style.display = "block";
+  moveTT(evt);
+}
+function moveTT(evt) {
+  const pad = 14, w = tt.offsetWidth, h = tt.offsetHeight;
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  if (x + w > window.innerWidth - 8) x = evt.clientX - w - pad;
+  if (y + h > window.innerHeight - 8) y = evt.clientY - h - pad;
+  tt.style.left = x + "px"; tt.style.top = y + "px";
+}
+function hideTT() { tt.style.display = "none"; }
+
+const NS = "http://www.w3.org/2000/svg";
+function el(name, attrs, parent) {
+  const e = document.createElementNS(NS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---------- stats table ---------- */
+(function () {
+  const rows = [
+    ["n (count)", "51", "51", "51"],
+    ["Mean", fmt$(GAS.mean), fmt$(EV.mean), fmt$(SAV.mean)],
+    ["Median", fmt$(GAS.median), fmt$(EV.median), fmt$(SAV.median)],
+    ["Std. deviation (sample)", fmt$(GAS.sd), fmt$(EV.sd), fmt$(SAV.sd)],
+    ["Minimum", fmt$(GAS.min), fmt$(EV.min), fmt$(SAV.min)],
+    ["Q1 (25th pct.)", fmt$(GAS.q1), fmt$(EV.q1), fmt$(SAV.q1)],
+    ["Q3 (75th pct.)", fmt$(GAS.q3), fmt$(EV.q3), fmt$(SAV.q3)],
+    ["Maximum", fmt$(GAS.max), fmt$(EV.max), fmt$(SAV.max)],
+    ["IQR", fmt$(GAS.iqr), fmt$(EV.iqr), fmt$(SAV.iqr)],
+    ["Upper fence (Q3 + 1.5×IQR)", fmt$(GAS.uf), fmt$(EV.uf), "—"],
+    ["Outliers", "WA, HI, CA", "CA, HI", "—"]
+  ];
+  const tb = document.getElementById("statsBody");
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    r.forEach((c, i) => {
+      const td = document.createElement("td");
+      td.textContent = c;
+      if (i === 0) td.className = "dim";
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  }
+})();
+
+/* ---------- box plot ---------- */
+(function () {
+  const W = 540, H = 190, L = 56, R = 16, T = 18, B = 34;
+  const pw = W - L - R;
+  const x = v => L + (v - XMIN) / (XMAX - XMIN) * pw;
+  const host = document.getElementById("boxplot");
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+    "aria-label": "Box plots of monthly cost: gas median $228.83, EV median $44.20" }, host);
+
+  for (let v = 0; v <= XMAX; v += 80) {
+    el("line", { x1: x(v), x2: x(v), y1: T, y2: H - B, stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    el("text", { x: x(v), y: H - B + 16, "text-anchor": "middle", class: "axis-t" }, svg).textContent = "$" + v;
+  }
+  el("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, stroke: "var(--baseline)", "stroke-width": 1 }, svg);
+
+  const series = [
+    { d: GAS, color: "var(--series-gas)", wash: "var(--wash-gas)", label: "Gas", y: T + 34, name: "Ford F-150 (gas)" },
+    { d: EV, color: "var(--series-ev)", wash: "var(--wash-ev)", label: "EV", y: T + 104, name: "Tesla Model 3 (EV)" }
+  ];
+  const bh = 26;
+
+  for (const s of series) {
+    const d = s.d;
+    const whiskLo = Math.max(d.min, d.lf);
+    const inMax = STATES.filter(r => !d.outliers.includes(r[0]))
+                        .reduce((m, r) => Math.max(m, s.label === "Gas" ? r[1] : r[2]), 0);
+    const whiskHi = Math.min(inMax, d.uf);
+    const cy = s.y + bh / 2;
+
+    el("text", { x: L - 8, y: cy + 4, "text-anchor": "end", class: "dlab-strong" }, svg).textContent = s.label;
+    el("line", { x1: x(whiskLo), x2: x(d.q1), y1: cy, y2: cy, stroke: s.color, "stroke-width": 2 }, svg);
+    el("line", { x1: x(d.q3), x2: x(whiskHi), y1: cy, y2: cy, stroke: s.color, "stroke-width": 2 }, svg);
+    el("line", { x1: x(whiskLo), x2: x(whiskLo), y1: cy - 7, y2: cy + 7, stroke: s.color, "stroke-width": 2 }, svg);
+    el("line", { x1: x(whiskHi), x2: x(whiskHi), y1: cy - 7, y2: cy + 7, stroke: s.color, "stroke-width": 2 }, svg);
+    const box = el("rect", { x: x(d.q1), y: s.y, width: x(d.q3) - x(d.q1), height: bh, rx: 4,
+      fill: s.wash, stroke: s.color, "stroke-width": 2 }, svg);
+    el("line", { x1: x(d.median), x2: x(d.median), y1: s.y, y2: s.y + bh, stroke: s.color, "stroke-width": 2.5 }, svg);
+    el("text", { x: x(d.median), y: s.y - 6, "text-anchor": "middle", class: "dlab" }, svg).textContent = "median " + fmt$(d.median);
+
+    for (const name of d.outliers) {
+      const row = STATES.find(r => r[0] === name);
+      const v = s.label === "Gas" ? row[1] : row[2];
+      el("circle", { cx: x(v), cy, r: 4.5, fill: s.color, stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+      const hit = el("circle", { cx: x(v), cy, r: 13, fill: "transparent", tabindex: 0 }, svg);
+      hit.addEventListener("pointermove", e => showTT(e, name + " (outlier)", [{ color: s.color, value: fmt$(v), name: s.name }]));
+      hit.addEventListener("pointerleave", hideTT);
+    }
+    if (d.outliers.length) {
+      const lastRow = STATES.find(r => r[0] === d.maxS);
+      const lastV = s.label === "Gas" ? lastRow[1] : lastRow[2];
+      el("text", { x: Math.min(x(lastV), W - R - 52), y: cy + 20, "text-anchor": "middle", class: "dlab" }, svg).textContent = d.maxS + " " + fmt$(lastV);
+    }
+    const hitBox = el("rect", { x: x(whiskLo) - 8, y: s.y - 8, width: x(whiskHi) - x(whiskLo) + 16, height: bh + 16, fill: "transparent" }, svg);
+    hitBox.addEventListener("pointermove", e => showTT(e, s.name, [
+      { color: s.color, value: fmt$(d.min), name: "minimum" },
+      { color: s.color, value: fmt$(d.q1), name: "Q1" },
+      { color: s.color, value: fmt$(d.median), name: "median" },
+      { color: s.color, value: fmt$(d.q3), name: "Q3" },
+      { color: s.color, value: fmt$(d.max), name: "maximum" }
+    ]));
+    hitBox.addEventListener("pointerleave", hideTT);
+    svg.appendChild(hitBox);
+  }
+})();
+
+/* ---------- histograms (small multiples, shared x) ---------- */
+(function () {
+  const BIN = 20, bins = XMAX / BIN;
+  // Class boundaries at $-0.50, $19.50, $39.50, ... — the ".5 rule": no observation can fall on a boundary
+  const binOf = v => Math.min(bins - 1, Math.floor((v + 0.5) / BIN));
+  const gasBins = new Array(bins).fill(0), evBins = new Array(bins).fill(0);
+  for (const r of STATES) {
+    gasBins[binOf(r[1])]++;
+    evBins[binOf(r[2])]++;
+  }
+  const ymax = Math.max(...gasBins, ...evBins);
+  const W = 540, rowH = 108, gap = 6, B = 58, L = 52, R = 20;
+  const H = rowH * 2 + gap + B;
+  const pw = W - L - R;
+  const x = v => L + v / XMAX * pw;
+  const host = document.getElementById("hist");
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+    "aria-label": "Histograms of monthly cost for gas and EV on a shared scale; bar height is the number of states in each $20 cost class" }, host);
+
+  const panels = [
+    { binsArr: gasBins, color: "var(--series-gas)", top: 0, name: "Ford F-150 (gas)" },
+    { binsArr: evBins, color: "var(--series-ev)", top: rowH + gap, name: "Tesla Model 3 (EV)" }
+  ];
+  for (const p of panels) {
+    const plotH = rowH - 20;
+    const y0 = p.top + rowH;
+    const y = c => y0 - c / ymax * plotH;
+    el("text", { x: L, y: p.top + 12, class: "dlab-strong" }, svg).textContent = p.name;
+    el("line", { x1: L, x2: W - R, y1: y0, y2: y0, stroke: "var(--baseline)", "stroke-width": 1 }, svg);
+    p.binsArr.forEach((c, i) => {
+      if (!c) return;
+      const bx = x(i * BIN - 0.5), bw = pw / bins;
+      const bh = y0 - y(c);
+      el("rect", { x: bx, y: y(c), width: bw, height: bh, fill: p.color, rx: 0 }, svg);
+      if (y(c) - 4 < p.top + 22) {
+        // tall bar: label would collide with the panel title — set it just inside the bar
+        el("text", { x: bx + bw / 2, y: y(c) + 12, "text-anchor": "middle", class: "dlab",
+          "font-size": "10px", style: "fill:#ffffff" }, svg).textContent = c;
+      } else {
+        el("text", { x: bx + bw / 2, y: y(c) - 4, "text-anchor": "middle", class: "dlab",
+          "font-size": "10px" }, svg).textContent = c;
+      }
+      const hit = el("rect", { x: bx - 1, y: p.top + 16, width: bw + 2, height: rowH - 16, fill: "transparent", tabindex: 0 }, svg);
+      hit.addEventListener("pointermove", e => showTT(e, `$${(i * BIN - 0.5).toFixed(2)}–$${((i + 1) * BIN - 0.5).toFixed(2)}`, [
+        { color: p.color, value: c + (c === 1 ? " state" : " states"), name: p.name }
+      ]));
+      hit.addEventListener("pointerleave", hideTT);
+    });
+  }
+  // x-axis ticks at every class boundary ($19.50 … $319.50), angled so they all fit
+  for (let k = 1; k <= bins; k++) {
+    const edge = k * BIN - 0.5;
+    el("line", { x1: x(edge), x2: x(edge), y1: H - B, y2: H - B + 4, stroke: "var(--baseline)", "stroke-width": 1 }, svg);
+    const t = el("text", { x: 0, y: 0, "text-anchor": "end", class: "axis-t",
+      "font-size": "9px", transform: `translate(${x(edge) + 3} ${H - B + 8}) rotate(-45)` }, svg);
+    t.textContent = "$" + edge.toFixed(2);
+  }
+  // axis titles
+  el("text", { x: L + pw / 2, y: H - 4, "text-anchor": "middle", class: "axis-t" }, svg)
+    .textContent = "Monthly cost for 1,125 miles ($) — $20 classes, boundaries at .50";
+  const yTitle = el("text", { x: 0, y: 0, "text-anchor": "middle", class: "axis-t",
+    transform: `translate(14 ${(rowH * 2 + gap) / 2 + 8}) rotate(-90)` }, svg);
+  yTitle.textContent = "Number of states";
+})();
+
+/* ---------- dumbbell ---------- */
+const sorters = {
+  sav: (a, b) => b[3] - a[3],
+  gas: (a, b) => b[1] - a[1],
+  ev: (a, b) => b[2] - a[2],
+  az: (a, b) => a[0].localeCompare(b[0])
+};
+function renderDumbbell(sortKey) {
+  const data = [...STATES].sort(sorters[sortKey]);
+  const W = 1120, L = 150, R = 90, rowH = 21, T = 24, B = 8;
+  const H = T + data.length * rowH + B;
+  const pw = W - L - R;
+  const x = v => L + (v - XMIN) / (XMAX - XMIN) * pw;
+  const host = document.getElementById("dumbbell");
+  host.replaceChildren();
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+    "aria-label": "Dumbbell chart: monthly EV vs gas cost for each state" }, host);
+
+  for (let v = 0; v <= XMAX; v += 40) {
+    el("line", { x1: x(v), x2: x(v), y1: T, y2: H - B, stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    el("text", { x: x(v), y: T - 8, "text-anchor": "middle", class: "axis-t" }, svg).textContent = "$" + v;
+  }
+
+  data.forEach((r, i) => {
+    const [name, gas, ev, sav] = r;
+    const cy = T + i * rowH + rowH / 2;
+    el("text", { x: L - 10, y: cy + 3.5, "text-anchor": "end", class: "dlab" }, svg).textContent = name;
+    el("line", { x1: x(ev), x2: x(gas), y1: cy, y2: cy, stroke: "var(--baseline)", "stroke-width": 2 }, svg);
+    el("circle", { cx: x(ev), cy, r: 5, fill: "var(--series-ev)", stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+    el("circle", { cx: x(gas), cy, r: 5, fill: "var(--series-gas)", stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+    if (name === "Washington" || name === "Indiana") {
+      el("text", { x: x(gas) + 12, y: cy + 3.5, class: "dlab-strong" }, svg).textContent = "saves " + fmt$(sav) + "/mo";
+    }
+    const hit = el("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: "transparent", tabindex: 0 }, svg);
+    hit.addEventListener("pointermove", e => showTT(e, name, [
+      { color: "var(--series-gas)", value: fmt$(gas), name: "F-150 gas / mo" },
+      { color: "var(--series-ev)", value: fmt$(ev), name: "Model 3 charging / mo" },
+      { color: "var(--baseline)", value: fmt$(sav), name: "monthly savings" }
+    ]));
+    hit.addEventListener("pointerleave", hideTT);
+    hit.addEventListener("focus", () => {
+      const rect = hit.getBoundingClientRect();
+      showTT({ clientX: rect.left + L, clientY: rect.top + rowH }, name, [
+        { color: "var(--series-gas)", value: fmt$(gas), name: "F-150 gas / mo" },
+        { color: "var(--series-ev)", value: fmt$(ev), name: "Model 3 charging / mo" },
+        { color: "var(--baseline)", value: fmt$(sav), name: "monthly savings" }
+      ]);
+    });
+    hit.addEventListener("blur", hideTT);
+  });
+}
+renderDumbbell("sav");
+document.querySelectorAll(".sortbtn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".sortbtn").forEach(b => b.setAttribute("aria-pressed", "false"));
+    btn.setAttribute("aria-pressed", "true");
+    renderDumbbell(btn.dataset.sort);
+  });
+});
+
+/* ---------- data table ---------- */
+(function () {
+  const tb = document.querySelector("#dataTable tbody");
+  [...STATES].sort(sorters.az).forEach(r => {
+    const tr = document.createElement("tr");
+    [r[0], fmt$(r[1]), fmt$(r[2]), fmt$(r[3])].forEach((c, i) => {
+      const td = document.createElement("td");
+      td.textContent = c;
+      if (i === 0) td.className = "dim";
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+})();
+</script>
+</body>
+</html>
